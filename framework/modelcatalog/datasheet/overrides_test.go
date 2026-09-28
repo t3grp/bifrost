@@ -1002,6 +1002,22 @@ func TestPatchPricing_InputCostPerQuery(t *testing.T) {
 	assert.Equal(t, 0.002, *patched.InputCostPerQuery)
 }
 
+func TestPatchPricing_WebSearchCostPerRequest(t *testing.T) {
+	base := configstoreTables.TableModelPricing{Model: "claude-haiku-4-5", Provider: "anthropic", Mode: "chat"}
+
+	patched := patchPricing(base, Options{WebSearchCostPerRequest: bifrost.Ptr(0.01)})
+	require.NotNil(t, patched.WebSearchCostPerRequest)
+	assert.Equal(t, 0.01, *patched.WebSearchCostPerRequest)
+
+	// Overrides saved before the field existed still price web search.
+	patched = patchPricing(base, Options{SearchContextCostPerQuery: bifrost.Ptr(0.02)})
+	require.NotNil(t, patched.WebSearchCostPerRequest)
+	assert.Equal(t, 0.02, *patched.WebSearchCostPerRequest)
+
+	patched = patchPricing(base, Options{WebSearchCostPerRequest: bifrost.Ptr(0.01), SearchContextCostPerQuery: bifrost.Ptr(0.02)})
+	assert.Equal(t, 0.01, *patched.WebSearchCostPerRequest)
+}
+
 func TestPatchPricing_SizeAndQualityImageRates(t *testing.T) {
 	base := configstoreTables.TableModelPricing{
 		Model:    "gpt-image-1",

@@ -67,6 +67,7 @@ describe("pricingFieldUnit", () => {
 			"ocr_cost_per_page",
 			"annotation_cost_per_page",
 			"search_context_cost_per_query",
+			"web_search_cost_per_request",
 			"input_cost_per_query",
 			"code_interpreter_cost_per_session",
 			"output_cost_per_image_high_quality",
@@ -84,7 +85,7 @@ describe("pricingFieldUnit", () => {
 			expect(byUnit[unit], `${field.key} resolved to unexpected unit ${unit}`).toBeDefined();
 			byUnit[unit].push(field.key);
 		}
-		expect(PRICING_FIELDS).toHaveLength(107);
+		expect(PRICING_FIELDS).toHaveLength(108);
 		expect(byUnit.multiplier).toEqual(["inference_geo_us_multiplier", "off_peak_cost_multiplier"]);
 		expect(byUnit.character).toEqual(["input_cost_per_character"]);
 		// Sanity: the split is real, not everything collapsing into one bucket.

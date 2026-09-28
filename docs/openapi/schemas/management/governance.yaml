@@ -2213,6 +2213,15 @@ PricingPatch:
     search_context_cost_per_query:
       type: number
       minimum: 0
+      description: >
+        Legacy web search rate. Used as web_search_cost_per_request when that
+        field is unset.
+    web_search_cost_per_request:
+      type: number
+      minimum: 0
+      description: >
+        Cost per server-side web search call, billed from
+        usage.tool_usage.web_search.num_requests.
     input_cost_per_query:
       type: number
       minimum: 0

@@ -317,8 +317,14 @@ export const PRICING_FIELDS = [
 		requestTypeGroups: ["chat"],
 	},
 	{
+		key: "web_search_cost_per_request",
+		label: "Web search / request",
+		group: "chat",
+		requestTypeGroups: ["chat", "rerank"],
+	},
+	{
 		key: "search_context_cost_per_query",
-		label: "Search context / query",
+		label: "Search context / query (legacy)",
 		group: "chat",
 		requestTypeGroups: ["chat", "rerank"],
 	},

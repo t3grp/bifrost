@@ -503,6 +503,7 @@ var configstoreMigrationSteps = []migrationStep{
 	{IDs: []string{"add_warp_log_embedding_columns"}, run: migrationAddWarpLogEmbeddingColumns},
 	{IDs: []string{"add_warp_temperature_reasoning_columns"}, run: migrationAddWarpTemperatureReasoningColumns},
 	{IDs: []string{"add_virtual_key_disable_content_logging_column"}, run: migrationAddVirtualKeyDisableContentLoggingColumn},
+	{IDs: []string{"add_web_search_cost_per_request_column"}, run: migrationAddWebSearchCostPerRequestColumn},
 }
 
 // warpLogEmbeddingColumns are the semantic-search configuration columns added
@@ -14089,6 +14090,40 @@ func migrationAddVirtualKeyDisableContentLoggingColumn(ctx context.Context, db *
 	}})
 	if err := m.Migrate(); err != nil {
 		return fmt.Errorf("error while running db migration: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddWebSearchCostPerRequestColumn adds web_search_cost_per_request, seeded from search_context_cost_per_query.
+func migrationAddWebSearchCostPerRequestColumn(ctx context.Context, db *gorm.DB, logger schemas.Logger) error {
+	migrationName := "add_web_search_cost_per_request_column"
+	logger.Info("[configstore] starting migration %s", migrationName)
+	defer logger.Info("[configstore] finished migration %s", migrationName)
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: migrationName,
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			if err := addColumnIfNotExists(tx, logger, &tables.TableModelPricing{}, "web_search_cost_per_request"); err != nil {
+				return fmt.Errorf("failed to add column web_search_cost_per_request: %w", err)
+			}
+			// Existing rows would bill web search at $0 until the next datasheet sync.
+			if err := tx.Model(&tables.TableModelPricing{}).
+				Where("web_search_cost_per_request IS NULL AND search_context_cost_per_query IS NOT NULL").
+				Update("web_search_cost_per_request", gorm.Expr("search_context_cost_per_query")).Error; err != nil {
+				return fmt.Errorf("failed to backfill web_search_cost_per_request: %w", err)
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			if err := dropColumnIfExists(tx, logger, &tables.TableModelPricing{}, "web_search_cost_per_request"); err != nil {
+				return fmt.Errorf("failed to drop column web_search_cost_per_request: %w", err)
+			}
+			return nil
+		},
+	}})
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running %s migration: %s", migrationName, err.Error())
 	}
 	return nil
 }

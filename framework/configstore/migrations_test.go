@@ -736,6 +736,26 @@ func setupVKTestDBWithoutRotationColumns(t *testing.T) *gorm.DB {
 	return db
 }
 
+func TestMigrationAddWebSearchCostPerRequestColumn_BackfillsFromSearchContext(t *testing.T) {
+	db := setupRDBTestStore(t).DB()
+	ctx := context.Background()
+	require.NoError(t, db.AutoMigrate(&tables.TableModelPricing{}))
+	require.NoError(t, db.Migrator().DropColumn(&tables.TableModelPricing{}, "web_search_cost_per_request"))
+
+	table := tables.TableModelPricing{}.TableName()
+	require.NoError(t, db.Table(table).Create(map[string]any{"model": "claude-haiku-4-5", "provider": "anthropic", "mode": "chat", "search_context_cost_per_query": 0.01}).Error)
+	require.NoError(t, db.Table(table).Create(map[string]any{"model": "gpt-4o", "provider": "openai", "mode": "chat"}).Error)
+
+	require.NoError(t, migrationAddWebSearchCostPerRequestColumn(ctx, db, testMigrationLogger))
+
+	var got []tables.TableModelPricing
+	require.NoError(t, db.Order("model").Find(&got).Error)
+	require.Len(t, got, 2)
+	require.NotNil(t, got[0].WebSearchCostPerRequest)
+	assert.InDelta(t, 0.01, *got[0].WebSearchCostPerRequest, 1e-12)
+	assert.Nil(t, got[1].WebSearchCostPerRequest)
+}
+
 func TestMigrationAddVKRotationCooldownColumns_CreatesIndex(t *testing.T) {
 	db := setupVKTestDBWithoutRotationColumns(t)
 	ctx := context.Background()

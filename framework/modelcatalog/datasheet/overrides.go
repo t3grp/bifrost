@@ -573,6 +573,7 @@ func patchPricing(pricing configstoreTables.TableModelPricing, override Options)
 		{dst: &patched.OutputCostPerImageAbove64Megapixels, src: override.OutputCostPerImageAbove64Megapixels},
 		{dst: &patched.CacheReadInputImageTokenCost, src: override.CacheReadInputImageTokenCost},
 		{dst: &patched.SearchContextCostPerQuery, src: override.SearchContextCostPerQuery},
+		{dst: &patched.WebSearchCostPerRequest, src: webSearchOverride(override)},
 		{dst: &patched.InputCostPerQuery, src: override.InputCostPerQuery},
 		{dst: &patched.CodeInterpreterCostPerSession, src: override.CodeInterpreterCostPerSession},
 		{dst: &patched.CostPerRequest, src: override.CostPerRequest},
@@ -595,6 +596,14 @@ func patchPricing(pricing configstoreTables.TableModelPricing, override Options)
 		patched.PeakHours = override.PeakHours
 	}
 	return patched
+}
+
+// webSearchOverride keeps overrides written before web_search_cost_per_request existed pricing web search.
+func webSearchOverride(override Options) *float64 {
+	if override.WebSearchCostPerRequest != nil {
+		return override.WebSearchCostPerRequest
+	}
+	return override.SearchContextCostPerQuery
 }
 
 // LoadOverridesFromStore reloads all overrides from the config store. Called
