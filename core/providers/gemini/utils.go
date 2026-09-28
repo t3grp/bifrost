@@ -1943,6 +1943,7 @@ func applyGeminiSearchQueryChatUsage(usage *schemas.BifrostLLMUsage, metadata *G
 		usage.CompletionTokensDetails = &schemas.ChatCompletionTokensDetails{}
 	}
 	usage.CompletionTokensDetails.NumSearchQueries = count
+	usage.ToolUsage = &schemas.ToolUsage{WebSearch: &schemas.WebSearchToolUsage{NumRequests: *count}}
 }
 
 // applyGeminiSearchQueryResponsesUsage is the Responses-shaped counterpart of
@@ -1956,6 +1957,7 @@ func applyGeminiSearchQueryResponsesUsage(usage *schemas.ResponsesResponseUsage,
 		usage.OutputTokensDetails = &schemas.ResponsesResponseOutputTokens{}
 	}
 	usage.OutputTokensDetails.NumSearchQueries = count
+	usage.ToolUsage = &schemas.ToolUsage{WebSearch: &schemas.WebSearchToolUsage{NumRequests: *count}}
 }
 
 // applyServerSideToolInvocations opts the request into Gemini's tool combination mode,
