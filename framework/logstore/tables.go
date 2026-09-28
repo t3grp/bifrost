@@ -1047,6 +1047,7 @@ func (l *Log) DeserializeFields() error {
 			// Without clearing the flag the row would stay marked degraded and
 			// billing would skip a row it can now price correctly.
 			l.usageRebuiltFromColumns = false
+			upgradeLegacySearchUsage(l.TokenUsageParsed)
 		}
 	}
 
@@ -2654,4 +2655,12 @@ type NodeUsageAggregate struct {
 	MaxTimestamp      time.Time          `json:"max_timestamp"`       // highest log timestamp included in the aggregate
 	MaxLogID          string             `json:"max_log_id"`          // log ID tiebreaker for MaxTimestamp
 	NextCursor        NodeUsageCursor    `json:"next_cursor"`         // stable cursor for the next incremental query
+}
+
+// upgradeLegacySearchUsage lifts pre-ToolUsage rows' num_search_queries into tool_usage so repricing still bills search.
+func upgradeLegacySearchUsage(u *schemas.BifrostLLMUsage) {
+	if u == nil || u.ToolUsage != nil || u.CompletionTokensDetails == nil || u.CompletionTokensDetails.NumSearchQueries == nil {
+		return
+	}
+	u.ToolUsage = &schemas.ToolUsage{WebSearch: &schemas.WebSearchToolUsage{NumRequests: *u.CompletionTokensDetails.NumSearchQueries}}
 }

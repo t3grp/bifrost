@@ -116,6 +116,18 @@ func TestDeserializeFieldsPrefersSerializedTokenUsage(t *testing.T) {
 	assert.Equal(t, 100, log.TokenUsageParsed.TotalTokens)
 }
 
+func TestDeserializeFieldsUpgradesLegacyNumSearchQueriesToToolUsage(t *testing.T) {
+	log := &Log{TokenUsage: `{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"completion_tokens_details":{"num_search_queries":3}}`}
+	require.NoError(t, log.DeserializeFields())
+	require.NotNil(t, log.TokenUsageParsed)
+	assert.Equal(t, 3, log.TokenUsageParsed.ToolUsage.WebSearch.NumRequests)
+
+	// A row that already carries tool_usage keeps its own count.
+	log = &Log{TokenUsage: `{"total_tokens":15,"completion_tokens_details":{"num_search_queries":3},"tool_usage":{"web_search":{"num_requests":1}}}`}
+	require.NoError(t, log.DeserializeFields())
+	assert.Equal(t, 1, log.TokenUsageParsed.ToolUsage.WebSearch.NumRequests)
+}
+
 func TestDeserializeFieldsDoesNotReconstructTokenUsageWhenSerializedValueIsMalformed(t *testing.T) {
 	log := &Log{
 		TokenUsage:       `{"prompt_tokens":`,
