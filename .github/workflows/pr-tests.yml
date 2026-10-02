@@ -1,7 +1,11 @@
 name: PR Tests (Requires Approval)
 
 on:
-  # Manual trigger only - requires admin to click "Run workflow" button
+  schedule:
+    - cron: "56 19 * * *"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, edited]
+  # PR runs require a same-repo release label; the protected environment still requires approval.
   workflow_dispatch:
     inputs:
       pr_number:
@@ -20,6 +24,7 @@ permissions:
 jobs:
   # Check if pipeline should be skipped based on first line of commit message
   check-skip:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,19 +41,27 @@ jobs:
 
       - name: Check if pipeline should be skipped
         id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_PR: ${{ github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release') }}
         run: |
+          # Full release PR and nightly runs always execute; --skip-ci remains for other manual runs.
+          if [[ "$EVENT_NAME" == "schedule" || "$RELEASE_PR" == "true" ]]; then
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
           FIRST_LINE=$(echo "$COMMIT_MESSAGE" | head -n 1)
           if [[ "$FIRST_LINE" == *"--skip-ci"* ]]; then
-            echo "should-skip=true" >> $GITHUB_OUTPUT
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "should-skip=false" >> $GITHUB_OUTPUT
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
           fi
 
   # This job shows up immediately and waits for approval
   run-tests:
     needs: [check-skip]
-    if: needs.check-skip.outputs.should-skip != 'true'
+    if: ${{ (needs.check-skip.outputs.should-skip != 'true') && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release'))) }}
     name: Run Tests (Awaiting Approval)
     runs-on: ubuntu-latest
 
@@ -160,9 +173,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ job.status }}" = "success" ]; then
-            gh pr comment ${{ github.event.pull_request.number }} --body "✅ **All tests passed successfully!**
+            gh pr comment ${{ github.event.pull_request.number }} --body "✅ **PR validation passed; full test suite follows.**
 
-            All test suites have completed without errors. This PR is ready for review.
+            The protected PR validation finished successfully. Check the full test suite job for release readiness.
 
             [View detailed results →](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           else
@@ -172,3 +185,10 @@ jobs:
 
             [View detailed results →](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           fi
+
+  full-tests:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release')) }}
+    needs:
+      - run-tests
+    uses: ./.github/workflows/full-test-suite.yml
+    secrets: inherit

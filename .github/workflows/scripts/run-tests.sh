@@ -24,12 +24,21 @@ report_result() {
   
   if [ "$result" -eq 0 ]; then
     echo -e "${GREEN}✅ $test_name passed${NC}"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
   else
     echo -e "${RED}❌ $test_name failed${NC}"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
   fi
 }
+
+if [[ "${1:-}" == "--self-test" ]]; then
+  report_result "success counter" 0
+  report_result "failure counter" 1
+  report_result "success counter" 0
+  report_result "failure counter" 1
+  [[ "$TESTS_PASSED" -eq 2 && "$TESTS_FAILED" -eq 2 ]]
+  exit 0
+fi
 
 # 1. Core Build Validation
 echo ""
