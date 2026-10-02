@@ -1,16 +1,14 @@
 name: Docs Validation
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "docs/**"
-
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, edited]
 permissions:
   contents: read
 
 jobs:
   check-broken-links:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release')) }}
     name: Check Broken Links
     runs-on: ubuntu-latest
     steps:

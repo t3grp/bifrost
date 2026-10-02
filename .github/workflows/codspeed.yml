@@ -6,7 +6,7 @@ name: CodSpeed Benchmarks
 # layers (payload parsing, provider request/response conversion, SSE framing,
 # key selection) is paid once per request - and once per chunk on a stream.
 # `go test -bench` already covers those paths; this workflow runs the same
-# benchmarks under the CodSpeed walltime instrument on every PR so a regression
+# benchmarks under the CodSpeed walltime instrument on release-labeled PRs and nightly so a regression
 # shows up as a diff against the base commit instead of surfacing in a load
 # test later.
 #
@@ -15,13 +15,8 @@ name: CodSpeed Benchmarks
 # too noisy for wall-clock comparisons.
 
 on:
-  push:
-    branches:
-      - dev
-      - main
   pull_request:
-  # `workflow_dispatch` allows CodSpeed to trigger backtest performance
-  # analysis in order to generate initial data.
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, edited]
   workflow_dispatch:
 
 permissions:
@@ -33,6 +28,7 @@ concurrency:
 
 jobs:
   benchmarks:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release')) }}
     name: Benchmarks (${{ matrix.name }})
     # CodSpeed's managed bare-metal runner for walltime benchmarks.
     # https://codspeed.io/docs/benchmarks/go

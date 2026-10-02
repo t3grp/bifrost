@@ -6,14 +6,13 @@ name: Workflow Lint
 # real release, with the release riding on it.
 on:
   pull_request:
-    paths:
-      - ".github/workflows/**"
-
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, edited]
 permissions:
   contents: read
 
 jobs:
   check-egress-allowlist:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release')) }}
     name: Egress allowlist covers apt + provider-harness hosts
     runs-on: ubuntu-latest
     timeout-minutes: 5

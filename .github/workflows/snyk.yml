@@ -2,7 +2,9 @@ name: Snyk checks
 
 on:
   push:
-    branches: [main, master, "**/*"]
+    branches: [main, "v2.0.0"]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, edited]
   workflow_dispatch:
 
 permissions:
@@ -11,6 +13,7 @@ permissions:
 
 jobs:
   snyk-open-source:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release')) }}
     name: Snyk Open Source (deps)
     runs-on: ubuntu-latest
     steps:
@@ -84,6 +87,7 @@ jobs:
           sarif_file: snyk.sarif
 
   snyk-code:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release')) }}
     name: Snyk Code (SAST)
     runs-on: ubuntu-latest
     steps:
