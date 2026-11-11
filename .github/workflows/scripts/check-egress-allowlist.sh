@@ -115,12 +115,10 @@ PY
 # rather than a firewall - and release-pipeline.yml only runs on push to main,
 # so the first time anyone sees it is during a real release.
 #
-# The rule enforced here is deliberately blunt: every external host appearing in
-# the harness collection or its seeded provider config must be either
-# allowlisted or listed in NOT_DIALLED_HOSTS with a reason. Classifying
-# automatically would mean deciding which URLs Bifrost fetches and which the
-# provider fetches, which depends on per-provider API shape and would silently
-# get it wrong. Forcing a human to say which one it is cannot.
+# Every external host appearing in the harness collection or its seeded provider
+# config must be allowlisted or have a documented non-dialled use. New exceptions
+# should identify the exact collection field and route: exempting an entire host
+# would also hide a later document/image source that Bifrost actually fetches.
 
 python3 - "${FILES[@]}" <<'PY'
 import json
@@ -175,11 +173,96 @@ HOST_RE = re.compile(r"https?://([A-Za-z0-9._-]+\.[A-Za-z]{2,})")
 TEMPLATED = re.compile(r"\{\{")
 
 
+def collection_text_for_host_scan(raw):
+    """Remove reviewed non-dialled references, retaining all other host uses."""
+    collection = json.loads(raw)
+    doc_hosts = {"ai.google.dev", "learn.microsoft.com"}
+    callback = "https://harness.example/cb"
+
+    def without_doc_hosts(text):
+        return HOST_RE.sub(
+            lambda match: "[documentation]" if match.group(1) in doc_hosts else match.group(0),
+            text,
+        )
+
+    def visit(node):
+        if not isinstance(node, dict):
+            return
+        # Postman descriptions are metadata. A same-host URL in request data or
+        # executable JavaScript remains in the census.
+        for metadata in (node, node.get("info"), node.get("request")):
+            if isinstance(metadata, dict) and isinstance(metadata.get("description"), str):
+                metadata["description"] = without_doc_hosts(metadata["description"])
+        for event in node.get("event") or []:
+            script = event.get("script") if isinstance(event, dict) else None
+            if not isinstance(script, dict) or not isinstance(script.get("exec"), list):
+                continue
+            script["exec"] = [
+                "".join(without_doc_hosts(line) if line.lstrip().startswith("//") else line
+                        for line in entry.splitlines(keepends=True))
+                if isinstance(entry, str) else entry
+                for entry in script["exec"]
+            ]
+
+        request = node.get("request")
+        if isinstance(request, dict):
+            url = request.get("url")
+            raw_url = url.get("raw", "") if isinstance(url, dict) else url
+            route = raw_url.split("?", 1)[0] if isinstance(raw_url, str) else ""
+            body = request.get("body")
+            if (request.get("method") == "POST" and isinstance(body, dict)
+                    and body.get("mode") == "raw" and isinstance(body.get("raw"), str)
+                    and route in ("{{baseUrl}}/anthropic/v1/messages", "{{baseUrl}}/oauth2/register")):
+                try:
+                    data = json.loads(body["raw"])
+                except (ValueError, TypeError):
+                    data = None  # Leave unknown/templated request bodies in the scan.
+                if isinstance(data, dict):
+                    if route == "{{baseUrl}}/anthropic/v1/messages":
+                        # Anthropic's MCP connector receives this URL unchanged
+                        # via core/providers/anthropic/chat.go; Bifrost does not
+                        # dial it. This does not exempt image/document sources.
+                        servers = data.get("mcp_servers")
+                        for server in servers if isinstance(servers, list) else []:
+                            if (isinstance(server, dict) and server.get("type") == "url"
+                                    and server.get("url") == "https://mcp.deepwiki.com/mcp"):
+                                server["url"] = "[provider-side MCP reference]"
+                    elif isinstance(data.get("redirect_uris"), list):
+                        # Registration stores this reserved OAuth test callback;
+                        # it does not request it. Other URI fields remain checked.
+                        data["redirect_uris"] = [
+                            "[OAuth callback fixture]" if value == callback else value
+                            for value in data["redirect_uris"]
+                        ]
+                    body["raw"] = json.dumps(data)
+            if (request.get("method") == "GET" and route == "{{baseUrl}}/oauth2/authorize"
+                    and (node.get("protocolProfileBehavior") or {}).get("followRedirects") is False):
+                # The request inspects the authorization redirect without following
+                # it. Require that flag; a followed redirect needs runner egress.
+                safe_url = re.sub(r"([?&]redirect_uri=)https://harness\.example/cb(?=&|$)",
+                                  r"\1[OAuth callback fixture]", raw_url)
+                if isinstance(url, dict):
+                    url["raw"] = safe_url
+                    for query in url.get("query") or []:
+                        if (isinstance(query, dict) and query.get("key") == "redirect_uri"
+                                and query.get("value") == callback):
+                            query["value"] = "[OAuth callback fixture]"
+                else:
+                    request["url"] = safe_url
+        for item in node.get("item") or []:
+            visit(item)
+
+    visit(collection)
+    return json.dumps(collection)
+
+
 def hosts_in(path):
     if not os.path.exists(path):
         return set()
     with open(path, encoding="utf-8") as fh:
         raw = fh.read()
+    if path == COLLECTION:
+        raw = collection_text_for_host_scan(raw)
     found = set()
     for line in raw.splitlines():
         if TEMPLATED.search(line):
@@ -279,9 +362,10 @@ for path, job_name, missing in failures:
 if failures:
     print(
         "\nEach host above appears in the provider harness collection or its seeded\n"
-        "provider config. Either add it to that job's allowed-endpoints, or - if the\n"
-        "provider dereferences it server-side and the runner never dials it - add it to\n"
-        "NOT_DIALLED_HOSTS in this script with the reason.",
+        "provider config. Add required runner destinations to allowed-endpoints.\n"
+        "For non-dialled references, document the exact field/route in\n"
+        "collection_text_for_host_scan and add a regression proving runtime uses\n"
+        "of the same host still require allowlisting.",
         file=sys.stderr,
     )
     sys.exit(1)

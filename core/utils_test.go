@@ -16,6 +16,25 @@ import (
 )
 
 func TestValidateExternalURL(t *testing.T) {
+	// This table tests address policy, not external DNS availability. Keep the
+	// real resolver for the separate DNS deadline tests below.
+	originalLookupIPAddr := lookupIPAddr
+	t.Cleanup(func() { lookupIPAddr = originalLookupIPAddr })
+	lookupIPAddr = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		switch host {
+		case "api.openai.com":
+			return []net.IPAddr{{IP: net.ParseIP("203.0.113.1")}}, nil
+		case "localhost":
+			return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}, {IP: net.ParseIP("::1")}}, nil
+		default:
+			if ip := net.ParseIP(host); ip != nil {
+				return []net.IPAddr{{IP: ip}}, nil
+			}
+			t.Errorf("unexpected hostname in test resolver: %q", host)
+			return nil, &net.DNSError{Err: "unexpected hostname in test resolver", Name: host}
+		}
+	}
+
 	tests := []struct {
 		name                string
 		url                 string

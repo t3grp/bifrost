@@ -1,0 +1,137 @@
+name: Basic CI
+
+# Routine verification has no provider/cloud credentials and needs no approval.
+# Live integrations stay in the separately protected PR Tests workflow.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [dev, main]
+  schedule:
+    - cron: "56 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: basic-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-build:
+    name: Core build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            dl.google.com:443
+            github.com:443
+            go.dev:443
+            objects.githubusercontent.com:443
+            proxy.golang.org:443
+            release-assets.githubusercontent.com:443
+            storage.googleapis.com:443
+            sum.golang.org:443
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version: "1.27.0"
+          cache-dependency-path: "**/go.sum"
+
+      - name: Build core against local workspace modules
+        run: |
+          source .github/workflows/scripts/setup-go-workspace.sh
+          cd core
+          go build ./...
+
+  core-unit:
+    name: Core unit and MCP mock tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: block
+          # Toolchain/package downloads only; MCP servers run on loopback.
+          # No provider API, cloud provisioning, or deployment endpoint is allowed.
+          allowed-endpoints: >
+            api.github.com:443
+            dl.google.com:443
+            github.com:443
+            go.dev:443
+            iojs.org:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            proxy.golang.org:443
+            registry.npmjs.org:443
+            release-assets.githubusercontent.com:443
+            storage.googleapis.com:443
+            sum.golang.org:443
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version: "1.27.0"
+          cache-dependency-path: "**/go.sum"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Build local MCP fixtures
+        run: |
+          source .github/workflows/scripts/setup-go-workspace.sh
+          make setup-mcp-tests USE_NODE=:
+
+      - name: Run core unit and MCP mock tests
+        run: bash .github/workflows/scripts/test-core-unit.sh
+
+  harness-unit:
+    name: Harness runner unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            iojs.org:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Run local harness runner tests
+        run: |
+          make test-harness-runner-lib USE_NODE=:

@@ -57,16 +57,7 @@ if [ "${#packages[@]}" -eq 0 ]; then
 fi
 go test -short -race -v -timeout 40m -coverprofile=coverage.txt "${packages[@]}"
 
-# Upload coverage to Codecov
-if [ -n "${CODECOV_TOKEN:-}" ]; then
-  echo "📊 Uploading coverage to Codecov..."
-  curl -Os https://uploader.codecov.io/latest/linux/codecov
-  chmod +x codecov
-  ./codecov -t "$CODECOV_TOKEN" -f coverage.txt -F transports
-  rm -f codecov coverage.txt
-else
-  echo "ℹ️ CODECOV_TOKEN not set, skipping coverage upload"
-  rm -f coverage.txt
-fi
+# Keep coverage.txt for the separate verified uploader step. The tests do not
+# receive the upload token or execute downloaded uploader code.
 
 echo "✅ Bifrost-HTTP unit tests completed successfully"

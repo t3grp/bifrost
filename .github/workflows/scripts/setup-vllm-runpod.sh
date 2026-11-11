@@ -2,24 +2,28 @@
 set -euo pipefail
 
 # Allocates two vLLM pods on RunPod for the test-vllm CI job and waits for
-# both to be healthy: a default vllm server pod (servers qwen3.5) and a vllm 
-# nightly server pod (servers GLM-4.7).
+# both to be healthy: a default vllm server pod (serves qwen3.5) and a
+# reasoning server pod (serves GLM-4.7), both using reviewed image digests.
 #
 # Usage: ./setup-vllm-runpod.sh
-# Required env: RUNPOD_API_KEY
+# Required env: RUNPOD_API_KEY, VLLM_IMAGE, VLLM_REASONING_IMAGE
+# Both images must use repository@sha256:<64 lowercase hexadecimal characters>.
 # Optional env (defaults match the two terraform configs above):
 #   RUNPOD_NETWORK_VOLUME_ID, RUNPOD_REASONING_NETWORK_VOLUME_ID - persist
 #     each pod's HF cache across runs so models aren't re-downloaded every
 #     release-pipeline run - create once with `runpodctl network-volume
 #     create` and store the ids as these secrets,
-#   VLLM_IMAGE, VLLM_MODEL_NAME, VLLM_TRUST_REMOTE_CODE, VLLM_TOOL_CALL_PARSER,
+#   VLLM_MODEL_NAME, VLLM_TRUST_REMOTE_CODE, VLLM_TOOL_CALL_PARSER,
 #     VLLM_REASONING_PARSER, VLLM_MAX_MODEL_LEN, VLLM_ENABLE_THINKING
 #     (default pod)
-#   VLLM_REASONING_IMAGE, VLLM_REASONING_MODEL_NAME,
+#   VLLM_REASONING_MODEL_NAME,
 #     VLLM_REASONING_TRUST_REMOTE_CODE, VLLM_REASONING_TOOL_CALL_PARSER,
 #     VLLM_REASONING_REASONING_PARSER, VLLM_REASONING_MAX_MODEL_LEN,
 #     VLLM_REASONING_ENABLE_THINKING (reasoning pod)
 #   VLLM_READY_TIMEOUT_SECONDS, VLLM_MAX_POD_LIFETIME_MINUTES (shared)
+# Both model loaders disable remote code by default. A maintainer may explicitly
+# set the corresponding *_TRUST_REMOTE_CODE=true only after reviewing that model
+# code. Image digests do not pin the model repository or its revision.
 #
 # Exports (via $GITHUB_ENV) for later steps in the same job:
 #   RUNPOD_POD_ID, VLLM_BASE_URL, VLLM_API_KEY, VLLM_CHAT_MODEL, VLLM_TEXT_MODEL,
@@ -32,6 +36,16 @@ API_PORT=8000
 GPU_TYPE_ID="NVIDIA A40"
 READY_TIMEOUT_SECONDS="${VLLM_READY_TIMEOUT_SECONDS:-1200}"
 MAX_POD_LIFETIME_MINUTES="${VLLM_MAX_POD_LIFETIME_MINUTES:-120}"
+
+# Validate both images before downloading tools or creating either billed pod.
+# An opt-in without reviewed digests must never fall back to latest/nightly.
+for image_name in VLLM_IMAGE VLLM_REASONING_IMAGE; do
+  image_ref="${!image_name:-}"
+  if [[ ! "$image_ref" =~ ^[a-zA-Z0-9][a-zA-Z0-9._:/-]*@sha256:[a-f0-9]{64}$ ]]; then
+    echo "::error::${image_name} must be a reviewed image pinned as repository@sha256:digest" >&2
+    exit 1
+  fi
+done
 
 if [ -z "${RUNPOD_API_KEY:-}" ]; then
   echo "::error::RUNPOD_API_KEY is not set" >&2
@@ -127,7 +141,7 @@ wait_for_vllm_ready() {
 DEFAULT_MODEL_NAME="${VLLM_MODEL_NAME:-Qwen/Qwen3.5-35B-A3B-GPTQ-Int4}"
 POD_ID=$(create_vllm_pod \
   "default" \
-  "${VLLM_IMAGE:-vllm/vllm-openai:latest}" \
+  "$VLLM_IMAGE" \
   "$DEFAULT_MODEL_NAME" \
   "${VLLM_TRUST_REMOTE_CODE:-false}" \
   "${VLLM_TOOL_CALL_PARSER:-qwen3_coder}" \
@@ -142,9 +156,9 @@ echo "RUNPOD_POD_ID=${POD_ID}" >> "$GITHUB_ENV"
 REASONING_MODEL_NAME="${VLLM_REASONING_MODEL_NAME:-QuantTrio/GLM-4.7-Flash-AWQ}"
 REASONING_POD_ID=$(create_vllm_pod \
   "reasoning" \
-  "${VLLM_REASONING_IMAGE:-vllm/vllm-openai:nightly}" \
+  "$VLLM_REASONING_IMAGE" \
   "$REASONING_MODEL_NAME" \
-  "${VLLM_REASONING_TRUST_REMOTE_CODE:-true}" \
+  "${VLLM_REASONING_TRUST_REMOTE_CODE:-false}" \
   "${VLLM_REASONING_TOOL_CALL_PARSER:-glm47}" \
   "${VLLM_REASONING_REASONING_PARSER:-glm45}" \
   "${VLLM_REASONING_ENABLE_THINKING:-true}" \

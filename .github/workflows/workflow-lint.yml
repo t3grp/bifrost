@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   check-egress-allowlist:
-    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'release')) }}
     name: Egress allowlist covers apt + provider-harness hosts
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -30,6 +29,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       # PyYAML only - deliberately no apt-get here, so this job needs no Ubuntu
       # mirror access and stays outside the very rule it enforces.
@@ -46,5 +47,20 @@ jobs:
       - name: Check egress allowlists
         run: ./.github/workflows/scripts/check-egress-allowlist.sh
 
+      - name: Check egress host classification
+        run: python3 .github/workflows/scripts/check-egress-allowlist.test.py -v
+
       - name: Check version-format guard
         run: ./.github/workflows/scripts/version-format.test.sh
+
+      - name: Check core unit-test selection
+        run: python3 .github/workflows/scripts/test-core-unit.test.py -v
+
+      - name: Check automatic and protected CI separation
+        run: python3 .github/workflows/scripts/ci-policy.test.py
+
+      - name: Check credential and RunPod helpers
+        run: python3 .github/workflows/scripts/ci-security-helpers.test.py
+
+      - name: Check governance test runner
+        run: python3 .github/workflows/scripts/test-governance.test.py
