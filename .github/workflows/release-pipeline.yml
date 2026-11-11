@@ -6,6 +6,19 @@ on:
     branches: ["main", "v2.0.0"]
   workflow_dispatch:
     inputs:
+      run-vllm-tests:
+        description: Run billed GPU tests on RunPod (requires both reviewed image digests).
+        required: false
+        type: boolean
+        default: false
+      vllm-image:
+        description: Default vLLM image as repository@sha256:digest (required for GPU tests).
+        required: false
+        type: string
+      vllm-reasoning-image:
+        description: Reasoning vLLM image as repository@sha256:digest (required for GPU tests).
+        required: false
+        type: string
       skip_tests:
         description: "Skip all tests and jump directly to release (admin only)"
         required: false
@@ -193,6 +206,9 @@ jobs:
       - detect-changes
     uses: ./.github/workflows/full-test-suite.yml
     with:
+      run-vllm-tests: ${{ github.event_name == 'workflow_dispatch' && inputs.run-vllm-tests }}
+      vllm-image: ${{ inputs.vllm-image || '' }}
+      vllm-reasoning-image: ${{ inputs.vllm-reasoning-image || '' }}
       core-needs-release: ${{ needs.detect-changes.outputs.core-needs-release }}
       framework-needs-release: ${{ needs.detect-changes.outputs.framework-needs-release }}
       plugins-need-release: ${{ needs.detect-changes.outputs.plugins-need-release }}
@@ -201,7 +217,61 @@ jobs:
       should-skip: ${{ needs.check-skip.outputs.should-skip }}
       skip-tests: ${{ needs.check-skip.outputs.skip-tests }}
       skip-core-test: ${{ needs.check-skip.outputs.skip-core-test }}
-    secrets: inherit
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_ARN: ${{ secrets.AWS_ARN }}
+      AWS_BEDROCK_ROLE_ARN: ${{ secrets.AWS_BEDROCK_ROLE_ARN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+      AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
+      BEDROCK_GUARDRAIL_IDENTIFIER: ${{ secrets.BEDROCK_GUARDRAIL_IDENTIFIER }}
+      BIFROST_ENCRYPTION_KEY: ${{ secrets.BIFROST_ENCRYPTION_KEY }}
+      CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      DATABRICKS_WORKSPACE_URL: ${{ secrets.DATABRICKS_WORKSPACE_URL }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GITHUB_COPILOT_APP_ID: ${{ secrets.GITHUB_COPILOT_APP_ID }}
+      GITHUB_COPILOT_INSTALLATION_ID: ${{ secrets.GITHUB_COPILOT_INSTALLATION_ID }}
+      GITHUB_COPILOT_PRIVATE_KEY: ${{ secrets.GITHUB_COPILOT_PRIVATE_KEY }}
+      GITHUB_COPILOT_REPOSITORY_ID: ${{ secrets.GITHUB_COPILOT_REPOSITORY_ID }}
+      GOOGLE_LOCATION: ${{ secrets.GOOGLE_LOCATION }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      HUGGING_FACE_API_KEY: ${{ secrets.HUGGING_FACE_API_KEY }}
+      MAXIM_API_KEY: ${{ secrets.MAXIM_API_KEY }}
+      MAXIM_LOG_REPO_ID: ${{ secrets.MAXIM_LOG_REPO_ID }}
+      MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+      NEBIUS_API_KEY: ${{ secrets.NEBIUS_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      PARASAIL_API_KEY: ${{ secrets.PARASAIL_API_KEY }}
+      PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+      REPLICATE_API_KEY: ${{ secrets.REPLICATE_API_KEY }}
+      RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+      RUNPOD_NETWORK_VOLUME_ID: ${{ secrets.RUNPOD_NETWORK_VOLUME_ID }}
+      RUNPOD_REASONING_NETWORK_VOLUME_ID: ${{ secrets.RUNPOD_REASONING_NETWORK_VOLUME_ID }}
+      RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
+      SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY }}
+      SGL_API_KEY: ${{ secrets.SGL_API_KEY }}
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+      VERTEX_CREDENTIALS: ${{ secrets.VERTEX_CREDENTIALS }}
+      VERTEX_GCS_BUCKET: ${{ secrets.VERTEX_GCS_BUCKET }}
+      VERTEX_GCS_PREFIX: ${{ secrets.VERTEX_GCS_PREFIX }}
+      VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
 
   core-release:
     needs: [check-skip, detect-changes, full-tests, publish-test-core-reports, approve-flaky-report-publication, publish-test-cli-harness-reports]

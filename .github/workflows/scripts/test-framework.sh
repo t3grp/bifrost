@@ -62,17 +62,8 @@ echo "✅ Framework build validation successful"
 echo "🧪 Running framework tests with coverage..."
 go test --race -coverprofile=coverage.txt -coverpkg=./... ./...
 
-# Upload coverage to Codecov
-if [ -n "${CODECOV_TOKEN:-}" ]; then
-  echo "📊 Uploading coverage to Codecov..."
-  curl -Os https://uploader.codecov.io/latest/linux/codecov
-  chmod +x codecov
-  ./codecov -t "$CODECOV_TOKEN" -f coverage.txt -F framework
-  rm -f codecov coverage.txt
-else
-  echo "ℹ️ CODECOV_TOKEN not set, skipping coverage upload"
-  rm -f coverage.txt
-fi
+# Keep the report for the separate, verified uploader step. Test execution
+# receives no Codecov credential and never downloads an uploader executable.
 cd ..
 
 echo "✅ Framework tests completed successfully"

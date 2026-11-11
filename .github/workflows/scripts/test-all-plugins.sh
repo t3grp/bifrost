@@ -145,16 +145,8 @@ for plugin in "${PLUGINS[@]}"; do
       fi
     fi
     
-    # Upload coverage to Codecov
-    if [ -n "${CODECOV_TOKEN:-}" ] && [ -f coverage.txt ]; then
-      echo "📊 Uploading coverage to Codecov..."
-      curl -Os https://uploader.codecov.io/latest/linux/codecov
-      chmod +x codecov
-      ./codecov -t "$CODECOV_TOKEN" -f coverage.txt -F "plugin-${plugin}"
-      rm -f codecov coverage.txt
-    else
-      rm -f coverage.txt
-    fi
+    # Preserve each report for the separate verified uploader step, which
+    # retains the plugin-specific flag without exposing its token to tests.
   else
     echo "ℹ️ No tests found for $plugin"
     SUCCESS_COUNT=$((SUCCESS_COUNT + 1))

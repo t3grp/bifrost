@@ -2,6 +2,18 @@ name: Full Test Suite
 'on':
   workflow_call:
     inputs:
+      run-vllm-tests:
+        description: Explicitly enable billed RunPod GPU tests; both image digests are required.
+        type: boolean
+        default: false
+      vllm-image:
+        description: Reviewed default vLLM image pinned as repository@sha256:digest.
+        type: string
+        default: ''
+      vllm-reasoning-image:
+        description: Reviewed reasoning vLLM image pinned as repository@sha256:digest.
+        type: string
+        default: ''
       core-needs-release:
         type: string
         default: 'true'
@@ -26,6 +38,116 @@ name: Full Test Suite
       skip-core-test:
         type: string
         default: 'false'
+    # Accept only credentials referenced by tests; publishing credentials stay with the caller.
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_ARN:
+        required: false
+      AWS_BEDROCK_ROLE_ARN:
+        required: false
+      AWS_REGION:
+        required: false
+      AWS_S3_BUCKET:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+      AWS_SESSION_TOKEN:
+        required: false
+      AZURE_API_KEY:
+        required: false
+      AZURE_API_VERSION:
+        required: false
+      AZURE_CLIENT_ID:
+        required: false
+      AZURE_CLIENT_SECRET:
+        required: false
+      AZURE_ENDPOINT:
+        required: false
+      AZURE_TENANT_ID:
+        required: false
+      BEDROCK_API_KEY:
+        required: false
+      BEDROCK_GUARDRAIL_IDENTIFIER:
+        required: false
+      BIFROST_ENCRYPTION_KEY:
+        required: false
+      CEREBRAS_API_KEY:
+        required: false
+      CODECOV_TOKEN:
+        required: false
+      COHERE_API_KEY:
+        required: false
+      DATABRICKS_TOKEN:
+        required: false
+      DATABRICKS_WORKSPACE_URL:
+        required: false
+      DEEPSEEK_API_KEY:
+        required: false
+      ELEVENLABS_API_KEY:
+        required: false
+      FIREWORKS_API_KEY:
+        required: false
+      GEMINI_API_KEY:
+        required: false
+      GITHUB_COPILOT_APP_ID:
+        required: false
+      GITHUB_COPILOT_INSTALLATION_ID:
+        required: false
+      GITHUB_COPILOT_PRIVATE_KEY:
+        required: false
+      GITHUB_COPILOT_REPOSITORY_ID:
+        required: false
+      GOOGLE_LOCATION:
+        required: false
+      GROQ_API_KEY:
+        required: false
+      HUGGING_FACE_API_KEY:
+        required: false
+      MAXIM_API_KEY:
+        required: false
+      MAXIM_LOG_REPO_ID:
+        required: false
+      MISTRAL_API_KEY:
+        required: false
+      NEBIUS_API_KEY:
+        required: false
+      OPENAI_API_KEY:
+        required: false
+      OPENROUTER_API_KEY:
+        required: false
+      PARASAIL_API_KEY:
+        required: false
+      PERPLEXITY_API_KEY:
+        required: false
+      REPLICATE_API_KEY:
+        required: false
+      RUNPOD_API_KEY:
+        required: false
+      RUNPOD_NETWORK_VOLUME_ID:
+        required: false
+      RUNPOD_REASONING_NETWORK_VOLUME_ID:
+        required: false
+      RUNWAY_API_KEY:
+        required: false
+      SARVAM_API_KEY:
+        required: false
+      SGL_API_KEY:
+        required: false
+      TYPESAFE_API_KEY:
+        required: false
+      VERTEX_CREDENTIALS:
+        required: false
+      VERTEX_GCS_BUCKET:
+        required: false
+      VERTEX_GCS_PREFIX:
+        required: false
+      VERTEX_PROJECT_ID:
+        required: false
+      XAI_API_KEY:
+        required: false
     outputs:
       build-gateway-result:
         description: Original build-gateway job result.
@@ -153,6 +275,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -199,6 +323,7 @@ jobs:
   # host and talks to real provider APIs, so every provider endpoint the
   # collection touches must be allowed below.
   test-core:
+    environment: pr-testing
     needs: [check-skip, detect-changes]
     # Gated on core alone. The provider harness only exercises core's provider
     # code paths, so a release that does not ship a new core has nothing here to
@@ -303,6 +428,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -419,6 +546,7 @@ jobs:
           retention-days: 30
 
   test-core-integrations:
+    environment: pr-testing
     needs: [check-skip, detect-changes, build-gateway]
     # skip-core-test drops this alongside test-core: both make live calls to the
     # upstream providers, so a provider outage that blocks one blocks both.
@@ -495,6 +623,9 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
@@ -603,6 +734,9 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
@@ -630,24 +764,7 @@ jobs:
       # Setting those vars here would do nothing - the local server wins unless
       # MCP_USE_REMOTE=1 is also set.
       - name: Run core unit tests
-        working-directory: core
-        run: |
-          packages=()
-          while IFS=$'\t' read -r package directory; do
-            if [[ "$package" == */internal/llmtests ]]; then
-              continue
-            fi
-            if find "$directory" -maxdepth 1 -name '*_test.go' -exec grep -lq '/internal/llmtests' {} +; then
-              echo "Skipping llmtests-backed package: $package"
-              continue
-            fi
-            packages+=("$package")
-          done < <(go list -f '{{.ImportPath}}{{"\t"}}{{.Dir}}' ./...)
-          if (( ${#packages[@]} == 0 )); then
-            echo "::error::No core unit-test packages found"
-            exit 1
-          fi
-          go test -timeout 20m "${packages[@]}"
+        run: bash .github/workflows/scripts/test-core-unit.sh
 
   # Break-glass for a test-core failure that survived its retries.
   #
@@ -715,6 +832,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           # This job uploads JUnit reports written by checked-out test code, and
           # actions/checkout persists its token in git config by default. Dropping it
           # removes the only path by which that token could reach an artifact.
@@ -823,6 +941,9 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -869,6 +990,7 @@ jobs:
   # total/done/pass/fail); each suite's verbose output is redirected to
   # tmp/cli-harness-<cli>.log and uploaded with the reports below.
   test-cli-harness:
+    environment: pr-testing
     needs: [check-skip, detect-changes, resolve-cli-versions, build-gateway]
     # Gated on core alone, matching test-core. What this harness actually covers
     # is core's request/response conversion per wire format, so a release with no
@@ -955,6 +1077,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -1063,8 +1187,9 @@ jobs:
           retention-days: 30
 
   test-vllm:
+    environment: pr-testing
     needs: [check-skip, detect-changes]
-    if: needs.check-skip.outputs.should-skip != 'true' && needs.check-skip.outputs.skip-tests != 'true' && needs.detect-changes.outputs.core-needs-release == 'true'
+    if: inputs.run-vllm-tests && needs.check-skip.outputs.should-skip != 'true' && needs.check-skip.outputs.skip-tests != 'true' && needs.detect-changes.outputs.core-needs-release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -1088,6 +1213,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -1098,6 +1225,8 @@ jobs:
 
       - name: Create vLLM pods on RunPod
         env:
+          VLLM_IMAGE: ${{ inputs.vllm-image }}
+          VLLM_REASONING_IMAGE: ${{ inputs.vllm-reasoning-image }}
           RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
           RUNPOD_NETWORK_VOLUME_ID: ${{ secrets.RUNPOD_NETWORK_VOLUME_ID }}
           RUNPOD_REASONING_NETWORK_VOLUME_ID: ${{ secrets.RUNPOD_REASONING_NETWORK_VOLUME_ID }}
@@ -1117,6 +1246,7 @@ jobs:
           ./.github/workflows/scripts/teardown-vllm-runpod.sh
 
   test-framework:
+    environment: pr-testing
     needs: [check-skip, detect-changes]
     if: needs.check-skip.outputs.should-skip != 'true' && needs.check-skip.outputs.skip-tests != 'true' && needs.detect-changes.outputs.framework-needs-release == 'true'
     runs-on: ubuntu-latest
@@ -1157,11 +1287,14 @@ jobs:
             storage.googleapis.com:443
             sum.golang.org:443
             telemetry.qdrant.io:443
-            uploader.codecov.io:443
+            api.codecov.io:443
+            ingest.codecov.io:443
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -1173,14 +1306,9 @@ jobs:
       - name: Set up Docker Compose
         run: |
           docker --version
-          if ! docker compose version >/dev/null 2>&1; then
-            echo "Installing Docker Compose..."
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
-            docker-compose --version
-          else
-            echo "Docker Compose plugin is available"
-            docker compose version
+          if ! docker compose version; then
+            echo "::error::The GitHub-hosted runner must provide the Docker Compose plugin."
+            exit 1
           fi
 
       - name: Run framework tests
@@ -1219,7 +1347,6 @@ jobs:
           VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
           VERTEX_GCS_BUCKET: ${{ secrets.VERTEX_GCS_BUCKET }}
           VERTEX_GCS_PREFIX: ${{ secrets.VERTEX_GCS_PREFIX }}
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
           HUGGING_FACE_API_KEY: ${{ secrets.HUGGING_FACE_API_KEY }}
           BIFROST_ENCRYPTION_KEY: ${{ secrets.BIFROST_ENCRYPTION_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -1231,7 +1358,13 @@ jobs:
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
         run: ./.github/workflows/scripts/test-framework.sh
 
+      - name: Upload framework coverage
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: bash .github/workflows/scripts/upload-coverage.sh framework
+
   test-plugins:
+    environment: pr-testing
     needs: [check-skip, detect-changes]
     if: needs.check-skip.outputs.should-skip != 'true' && needs.check-skip.outputs.skip-tests != 'true' && needs.detect-changes.outputs.plugins-need-release == 'true'
     runs-on: ubuntu-latest
@@ -1280,11 +1413,14 @@ jobs:
             storage.googleapis.com:443
             sum.golang.org:443
             telemetry.qdrant.io:443
-            uploader.codecov.io:443
+            api.codecov.io:443
+            ingest.codecov.io:443
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -1301,14 +1437,9 @@ jobs:
       - name: Set up Docker Compose
         run: |
           docker --version
-          if ! docker compose version >/dev/null 2>&1; then
-            echo "Installing Docker Compose..."
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
-            docker-compose --version
-          else
-            echo "Docker Compose plugin is available"
-            docker compose version
+          if ! docker compose version; then
+            echo "::error::The GitHub-hosted runner must provide the Docker Compose plugin."
+            exit 1
           fi
 
       - name: Run plugin tests
@@ -1347,7 +1478,6 @@ jobs:
           VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
           VERTEX_GCS_BUCKET: ${{ secrets.VERTEX_GCS_BUCKET }}
           VERTEX_GCS_PREFIX: ${{ secrets.VERTEX_GCS_PREFIX }}
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
           HUGGING_FACE_API_KEY: ${{ secrets.HUGGING_FACE_API_KEY }}
           BIFROST_ENCRYPTION_KEY: ${{ secrets.BIFROST_ENCRYPTION_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -1359,7 +1489,14 @@ jobs:
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
         run: ./.github/workflows/scripts/test-all-plugins.sh
 
+      - name: Upload plugins coverage
+        if: ${{ !cancelled() }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: bash .github/workflows/scripts/upload-coverage.sh plugins
+
   test-bifrost-http:
+    environment: pr-testing
     needs: [check-skip, detect-changes]
     if: needs.check-skip.outputs.should-skip != 'true' && needs.check-skip.outputs.skip-tests != 'true' && needs.detect-changes.outputs.bifrost-http-needs-release == 'true'
     runs-on: ubuntu-latest
@@ -1396,12 +1533,15 @@ jobs:
             release-assets.githubusercontent.com:443
             storage.googleapis.com:443
             sum.golang.org:443
-            uploader.codecov.io:443
+            api.codecov.io:443
+            ingest.codecov.io:443
             www.getbifrost.ai:443
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -1412,9 +1552,13 @@ jobs:
 
       - name: Run bifrost-http unit tests
         env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
           BIFROST_ENCRYPTION_KEY: ${{ secrets.BIFROST_ENCRYPTION_KEY }}
         run: ./.github/workflows/scripts/test-bifrost-http.sh
+
+      - name: Upload transports coverage
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: bash .github/workflows/scripts/upload-coverage.sh transports
 
   # Migration tests - validates database migrations from previous versions
   test-migrations:
@@ -1471,6 +1615,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -1487,14 +1633,9 @@ jobs:
       - name: Set up Docker Compose
         run: |
           docker --version
-          if ! docker compose version >/dev/null 2>&1; then
-            echo "Installing Docker Compose..."
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
-            docker-compose --version
-          else
-            echo "Docker Compose plugin is available"
-            docker compose version
+          if ! docker compose version; then
+            echo "::error::The GitHub-hosted runner must provide the Docker Compose plugin."
+            exit 1
           fi
 
       # Only the "current version" binary comes from here; the previous-version
@@ -1518,6 +1659,7 @@ jobs:
   # API integrations tests - compiles bifrost-http, runs against Postgres with
   # tests/config.json, executes the api-management newman collection.
   test-api-integrations:
+    environment: pr-testing
     needs: [check-skip, detect-changes, build-gateway]
     if: needs.check-skip.outputs.should-skip != 'true' && needs.check-skip.outputs.skip-tests != 'true' && needs.detect-changes.outputs.bifrost-http-needs-release == 'true'
     runs-on: ubuntu-latest
@@ -1595,6 +1737,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -1621,14 +1765,9 @@ jobs:
       - name: Set up Docker Compose
         run: |
           docker --version
-          if ! docker compose version >/dev/null 2>&1; then
-            echo "Installing Docker Compose..."
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
-            docker-compose --version
-          else
-            echo "Docker Compose plugin is available"
-            docker compose version
+          if ! docker compose version; then
+            echo "::error::The GitHub-hosted runner must provide the Docker Compose plugin."
+            exit 1
           fi
 
       - name: Download prebuilt bifrost-http binary
@@ -1749,6 +1888,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
@@ -1757,6 +1897,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: maximhq/bifrost-benchmarking
+          ref: 3cb72a95cacaee6f73f9db5636a1a651c7dcb1e9
           path: bifrost-benchmarking
           persist-credentials: false
 
@@ -1844,6 +1985,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
@@ -1852,6 +1994,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: maximhq/bifrost-benchmarking
+          ref: 3cb72a95cacaee6f73f9db5636a1a651c7dcb1e9
           path: bifrost-benchmarking
           persist-credentials: false
 
@@ -1898,6 +2041,7 @@ jobs:
 
   # Docker image test - amd64
   test-docker-image-amd64:
+    environment: pr-testing
     needs: [check-skip, detect-changes]
     if: needs.check-skip.outputs.should-skip != 'true' && needs.check-skip.outputs.skip-tests != 'true' && needs.detect-changes.outputs.docker-needs-release == 'true'
     runs-on: ubuntu-latest
@@ -1968,6 +2112,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -2049,6 +2195,7 @@ jobs:
 
   # Docker image test - arm64
   test-docker-image-arm64:
+    environment: pr-testing
     needs: [check-skip, detect-changes]
     if: needs.check-skip.outputs.should-skip != 'true' && needs.check-skip.outputs.skip-tests != 'true' && needs.detect-changes.outputs.docker-needs-release == 'true'
     runs-on: ubuntu-24.04-arm
@@ -2119,6 +2266,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
